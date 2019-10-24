@@ -52,7 +52,7 @@ subprojects {
 	apply from: "${rootDir}/gradle/manifest-gen.gradle"
 }
 
-task clean(type: Delete) {
+task clean2(type: Delete) {
 	group 'Build'
 	description 'Deletes the local repositories'
 	delete 'build'
