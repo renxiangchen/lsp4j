@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright (c) 2017, 2018 Kichwa Coders Ltd. and others.
+ * Copyright (c) 2017, 2020 Kichwa Coders Ltd. and others.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
@@ -26,13 +26,36 @@ class DebugProtocol {
 	/**
 	 * Version of Debug Protocol
 	 */
-	public static final String SCHEMA_VERSION = "1.35.0";
+	public static final String SCHEMA_VERSION = "1.44.0";
+}
+
+/**
+ * Arguments for 'cancel' request.
+ */
+@JsonRpcData
+class CancelArguments {
+	/**
+	 * The ID (attribute 'seq') of the request to cancel. If missing no request is cancelled.
+	 * <p>
+	 * Both a 'requestId' and a 'progressId' can be specified in one request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer requestId;
+	/**
+	 * The ID (attribute 'progressId') of the progress to cancel. If missing no progress is cancelled.
+	 * <p>
+	 * Both a 'requestId' and a 'progressId' can be specified in one request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String progressId;
 }
 
 /**
  * The event indicates that the execution of the debuggee has stopped due to some condition.
  * <p>
- * This can be caused by a break point previously set, a stepping action has completed, by executing a debugger
+ * This can be caused by a break point previously set, a stepping request has completed, by executing a debugger
  * statement etc.
  */
 @JsonRpcData
@@ -59,7 +82,7 @@ class StoppedEventArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long threadId;
+	Integer threadId;
 	/**
 	 * A value of true hints to the frontend that this event should not change the focus.
 	 * <p>
@@ -103,6 +126,7 @@ interface StoppedEventArgumentsReason {
 	public static final String GOTO = "goto";
 	public static final String FUNCTION_BREAKPOINT = "function breakpoint";
 	public static final String DATA_BREAKPOINT = "data breakpoint";
+	public static final String INSTRUCTION_BREAKPOINT = "instruction breakpoint";
 }
 
 /**
@@ -118,8 +142,7 @@ class ContinuedEventArguments {
 	/**
 	 * The thread which was continued.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 	/**
 	 * If 'allThreadsContinued' is true, a debug adapter can announce that all threads have continued.
 	 * <p>
@@ -136,8 +159,7 @@ class ExitedEventArguments {
 	/**
 	 * The exit code returned from the debuggee.
 	 */
-	@NonNull
-	Long exitCode;
+	int exitCode;
 }
 
 /**
@@ -173,8 +195,7 @@ class ThreadEventArguments {
 	/**
 	 * The identifier of the thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 }
 
 /**
@@ -206,12 +227,19 @@ class OutputEventArguments {
 	@NonNull
 	String output;
 	/**
-	 * If an attribute 'variablesReference' exists and its value is > 0, the output contains objects which can be
-	 * retrieved by passing 'variablesReference' to the 'variables' request.
+	 * Support for keeping an output log organized by grouping related messages.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long variablesReference;
+	OutputEventArgumentsGroup group;
+	/**
+	 * If an attribute 'variablesReference' exists and its value is &gt; 0, the output contains objects which can be
+	 * retrieved by passing 'variablesReference' to the 'variables' request. The value should be less than or equal to
+	 * 2147483647 (2^31-1).
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer variablesReference;
 	/**
 	 * An optional source location where the output was produced.
 	 * <p>
@@ -223,13 +251,13 @@ class OutputEventArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long line;
+	Integer line;
 	/**
 	 * An optional source location column where the output was produced.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * Optional data to report. For the 'telemetry' category the data will be sent to telemetry, for the other
 	 * categories the data is shown in JSON format.
@@ -252,6 +280,31 @@ interface OutputEventArgumentsCategory {
 }
 
 /**
+ * Support for keeping an output log organized by grouping related messages.
+ */
+enum OutputEventArgumentsGroup {
+	/**
+	 * Start a new group in expanded mode. Subsequent output events are members of the group and should be shown
+	 * indented.
+	 * The 'output' attribute becomes the name of the group and is not indented.
+	 */
+	START,
+	/**
+	 * Start a new group in collapsed mode. Subsequent output events are members of the group and should be shown
+	 * indented (as soon as the group is expanded).
+	 * The 'output' attribute becomes the name of the group and is not
+	 * indented.
+	 */
+	START_COLLAPSED,
+	/**
+	 * End the current group and decreases the indentation of subsequent output events.
+	 * A non empty 'output' attribute
+	 * is shown as the unindented end of the group.
+	 */
+	END
+}
+
+/**
  * The event indicates that some information about a breakpoint has changed.
  */
 @JsonRpcData
@@ -264,7 +317,7 @@ class BreakpointEventArguments {
 	@NonNull
 	String reason;
 	/**
-	 * The breakpoint.
+	 * The 'id' attribute is used to find the target breakpoint and the other attributes are used as the new values.
 	 */
 	@NonNull
 	Breakpoint breakpoint;
@@ -350,7 +403,7 @@ class ProcessEventArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long systemProcessId;
+	Integer systemProcessId;
 	/**
 	 * If true, the process is running on the same computer as the debug adapter.
 	 * <p>
@@ -369,7 +422,7 @@ class ProcessEventArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long pointerSize;
+	Integer pointerSize;
 }
 
 /**
@@ -412,22 +465,171 @@ class CapabilitiesEventArguments {
 }
 
 /**
+ * The event signals that a long running operation is about to start and
+ * <p>
+ * provides additional information for the client to set up a corresponding progress and cancellation UI.
+ * <p>
+ * The client is free to delay the showing of the UI in order to reduce flicker.
+ * <p>
+ * This event should only be sent if the client has passed the value true for the 'supportsProgressReporting'
+ * capability of the 'initialize' request.
+ */
+@JsonRpcData
+class ProgressStartEventArguments {
+	/**
+	 * An ID that must be used in subsequent 'progressUpdate' and 'progressEnd' events to make them refer to the same
+	 * progress reporting.
+	 * <p>
+	 * IDs must be unique within a debug session.
+	 */
+	@NonNull
+	String progressId;
+	/**
+	 * Mandatory (short) title of the progress reporting. Shown in the UI to describe the long running operation.
+	 */
+	@NonNull
+	String title;
+	/**
+	 * The request ID that this progress report is related to. If specified a debug adapter is expected to emit
+	 * <p>
+	 * progress events for the long running request until the request has been either completed or cancelled.
+	 * <p>
+	 * If the request ID is omitted, the progress report is assumed to be related to some general activity of the
+	 * debug adapter.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer requestId;
+	/**
+	 * If true, the request that reports progress may be canceled with a 'cancel' request.
+	 * <p>
+	 * So this property basically controls whether the client should use UX that supports cancellation.
+	 * <p>
+	 * Clients that don't support cancellation are allowed to ignore the setting.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean cancellable;
+	/**
+	 * Optional, more detailed progress message.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String message;
+	/**
+	 * Optional progress percentage to display (value range: 0 to 100). If omitted no percentage will be shown.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Double percentage;
+}
+
+/**
+ * The event signals that the progress reporting needs to updated with a new message and/or percentage.
+ * <p>
+ * The client does not have to update the UI immediately, but the clients needs to keep track of the message
+ * and/or percentage values.
+ * <p>
+ * This event should only be sent if the client has passed the value true for the 'supportsProgressReporting'
+ * capability of the 'initialize' request.
+ */
+@JsonRpcData
+class ProgressUpdateEventArguments {
+	/**
+	 * The ID that was introduced in the initial 'progressStart' event.
+	 */
+	@NonNull
+	String progressId;
+	/**
+	 * Optional, more detailed progress message. If omitted, the previous message (if any) is used.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String message;
+	/**
+	 * Optional progress percentage to display (value range: 0 to 100). If omitted no percentage will be shown.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Double percentage;
+}
+
+/**
+ * The event signals the end of the progress reporting with an optional final message.
+ * <p>
+ * This event should only be sent if the client has passed the value true for the 'supportsProgressReporting'
+ * capability of the 'initialize' request.
+ */
+@JsonRpcData
+class ProgressEndEventArguments {
+	/**
+	 * The ID that was introduced in the initial 'ProgressStartEvent'.
+	 */
+	@NonNull
+	String progressId;
+	/**
+	 * Optional, more detailed progress message. If omitted, the previous message (if any) is used.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String message;
+}
+
+/**
+ * This event signals that some state in the debug adapter has changed and requires that the client needs to
+ * re-render the data snapshot previously requested.
+ * <p>
+ * Debug adapters do not have to emit this event for runtime changes like stopped or thread events because in that
+ * case the client refetches the new state anyway. But the event can be used for example to refresh the UI after
+ * rendering formatting has changed in the debug adapter.
+ * <p>
+ * This event should only be sent if the debug adapter has received a value true for the
+ * 'supportsInvalidatedEvent' capability of the 'initialize' request.
+ */
+@JsonRpcData
+class InvalidatedEventArguments {
+	/**
+	 * Optional set of logical areas that got invalidated. This property has a hint characteristic: a client can only
+	 * be expected to make a 'best effort' in honouring the areas but there are no guarantees. If this property is
+	 * missing, empty, or if values are not understand the client should assume a single value 'all'.
+	 * <p>
+	 * This is an optional property.
+	 * <p>
+	 * Possible values include - but not limited to those defined in {@link InvalidatedAreas}
+	 */
+	String[] areas;
+	/**
+	 * If specified, the client only needs to refetch data related to this thread.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer threadId;
+	/**
+	 * If specified, the client only needs to refetch data related to this stack frame (and the 'threadId' is
+	 * ignored).
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer stackFrameId;
+}
+
+/**
  * Response to 'runInTerminal' request.
  */
 @JsonRpcData
 class RunInTerminalResponse {
 	/**
-	 * The process ID.
+	 * The process ID. The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long processId;
+	Integer processId;
 	/**
-	 * The process ID of the terminal shell.
+	 * The process ID of the terminal shell. The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long shellProcessId;
+	Integer shellProcessId;
 }
 
 /**
@@ -448,7 +650,8 @@ class RunInTerminalRequestArguments {
 	 */
 	String title;
 	/**
-	 * Working directory of the command.
+	 * Working directory for the command. For non-empty, valid paths this typically results in execution of a change
+	 * directory command.
 	 */
 	@NonNull
 	String cwd;
@@ -545,6 +748,18 @@ class InitializeRequestArguments {
 	 * This is an optional property.
 	 */
 	Boolean supportsMemoryReferences;
+	/**
+	 * Client supports progress reporting.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsProgressReporting;
+	/**
+	 * Client supports the invalidated event.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsInvalidatedEvent;
 }
 
 /**
@@ -618,6 +833,8 @@ class RestartArguments {
 class DisconnectArguments {
 	/**
 	 * A value of true indicates that this 'disconnect' request is part of a restart sequence.
+	 * <p>
+	 * This is an optional property.
 	 */
 	Boolean restart;
 	/**
@@ -625,8 +842,7 @@ class DisconnectArguments {
 	 * <p>
 	 * If unspecified, the debug adapter is free to do whatever it thinks is best.
 	 * <p>
-	 * A client can only rely on this attribute being properly honored if a debug adapter returns true for the
-	 * 'supportTerminateDebuggee' capability.
+	 * The attribute is only honored by a debug adapter if the capability 'supportTerminateDebuggee' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -640,8 +856,62 @@ class DisconnectArguments {
 class TerminateArguments {
 	/**
 	 * A value of true indicates that this 'terminate' request is part of a restart sequence.
+	 * <p>
+	 * This is an optional property.
 	 */
 	Boolean restart;
+}
+
+/**
+ * Response to 'breakpointLocations' request.
+ * <p>
+ * Contains possible locations for source breakpoints.
+ */
+@JsonRpcData
+class BreakpointLocationsResponse {
+	/**
+	 * Sorted set of possible breakpoint locations.
+	 */
+	@NonNull
+	BreakpointLocation[] breakpoints;
+}
+
+/**
+ * Arguments for 'breakpointLocations' request.
+ */
+@JsonRpcData
+class BreakpointLocationsArguments {
+	/**
+	 * The source location of the breakpoints; either 'source.path' or 'source.reference' must be specified.
+	 */
+	@NonNull
+	Source source;
+	/**
+	 * Start line of range to search possible breakpoint locations in. If only the line is specified, the request
+	 * returns all possible locations in that line.
+	 */
+	int line;
+	/**
+	 * Optional start column of range to search possible breakpoint locations in. If no start column is given, the
+	 * first column in the start line is assumed.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer column;
+	/**
+	 * Optional end line of range to search possible breakpoint locations in. If no end line is given, then the end
+	 * line is assumed to be the start line.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer endLine;
+	/**
+	 * Optional end column of range to search possible breakpoint locations in. If no end column is given, then it is
+	 * assumed to be in the last column of the end line.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer endColumn;
 }
 
 /**
@@ -658,8 +928,10 @@ class TerminateArguments {
 @JsonRpcData
 class SetBreakpointsResponse {
 	/**
-	 * Information about the breakpoints. The array elements are in the same order as the elements of the
-	 * 'breakpoints' (or the deprecated 'lines') array in the arguments.
+	 * Information about the breakpoints.
+	 * <p>
+	 * The array elements are in the same order as the elements of the 'breakpoints' (or the deprecated 'lines') array
+	 * in the arguments.
 	 */
 	@NonNull
 	Breakpoint[] breakpoints;
@@ -685,8 +957,11 @@ class SetBreakpointsArguments {
 	 * Deprecated: The code locations of the breakpoints.
 	 * <p>
 	 * This is an optional property.
+	 * <p>
+	 * @deprecated Use the line field in the breakpoints property instead.
 	 */
-	Long[] lines;
+	@Deprecated
+	int[] lines;
 	/**
 	 * A value of true indicates that the underlying source has been modified which results in new breakpoint
 	 * locations.
@@ -728,12 +1003,23 @@ class SetFunctionBreakpointsArguments {
 @JsonRpcData
 class SetExceptionBreakpointsArguments {
 	/**
-	 * IDs of checked exception options. The set of IDs is returned via the 'exceptionBreakpointFilters' capability.
+	 * Set of exception filters specified by their ID. The set of all possible exception filters is defined by the
+	 * 'exceptionBreakpointFilters' capability. The 'filter' and 'filterOptions' sets are additive.
 	 */
 	@NonNull
 	String[] filters;
 	/**
+	 * Set of exception filters and their options. The set of all possible exception filters is defined by the
+	 * 'exceptionBreakpointFilters' capability. This attribute is only honored by a debug adapter if the capability
+	 * 'supportsExceptionFilterOptions' is true. The 'filter' and 'filterOptions' sets are additive.
+	 * <p>
+	 * This is an optional property.
+	 */
+	ExceptionFilterOptions[] filterOptions;
+	/**
 	 * Configuration options for selected exceptions.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsExceptionOptions' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -779,11 +1065,12 @@ class DataBreakpointInfoArguments {
 	 * Reference to the Variable container if the data breakpoint is requested for a child of the container.
 	 * <p>
 	 * This is an optional property.
-	*/
-	Long variablesReference;
+	 */
+	Integer variablesReference;
 	/**
-	 * The name of the Variable's child to obtain data breakpoint information for. If variableReference isn't provided,
-	 * this can be an expression.
+	 * The name of the Variable's child to obtain data breakpoint information for.
+	 * <p>
+	 * If variablesReference isn’t provided, this can be an expression.
 	 */
 	@NonNull
 	String name;
@@ -797,7 +1084,8 @@ class DataBreakpointInfoArguments {
 @JsonRpcData
 class SetDataBreakpointsResponse {
 	/**
-	 * Information about the data breakpoints. The array elements correspond to the elements of the 'breakpoints' array.
+	 * Information about the data breakpoints. The array elements correspond to the elements of the input argument
+	 * 'breakpoints' array.
 	 */
 	@NonNull
 	Breakpoint[] breakpoints;
@@ -816,13 +1104,38 @@ class SetDataBreakpointsArguments {
 }
 
 /**
+ * Response to 'setInstructionBreakpoints' request
+ */
+@JsonRpcData
+class SetInstructionBreakpointsResponse {
+	/**
+	 * Information about the breakpoints. The array elements correspond to the elements of the 'breakpoints' array.
+	 */
+	@NonNull
+	Breakpoint[] breakpoints;
+}
+
+/**
+ * Arguments for 'setInstructionBreakpoints' request
+ */
+@JsonRpcData
+class SetInstructionBreakpointsArguments {
+	/**
+	 * The instruction references of the breakpoints
+	 */
+	@NonNull
+	InstructionBreakpoint[] breakpoints;
+}
+
+/**
  * Response to 'continue' request.
  */
 @JsonRpcData
 class ContinueResponse {
 	/**
-	 * If true, the 'continue' request has ignored the specified thread and continued all threads instead. If this
-	 * attribute is missing a value of 'true' is assumed for backward compatibility.
+	 * If true, the 'continue' request has ignored the specified thread and continued all threads instead.
+	 * <p>
+	 * If this attribute is missing a value of 'true' is assumed for backward compatibility.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -835,11 +1148,12 @@ class ContinueResponse {
 @JsonRpcData
 class ContinueArguments {
 	/**
-	 * Continue execution for the specified thread (if possible). If the backend cannot continue on a single thread
-	 * but will continue on all threads, it should set the 'allThreadsContinued' attribute in the response to true.
+	 * Continue execution for the specified thread (if possible).
+	 * <p>
+	 * If the backend cannot continue on a single thread but will continue on all threads, it should set the
+	 * 'allThreadsContinued' attribute in the response to true.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 }
 
 /**
@@ -850,8 +1164,13 @@ class NextArguments {
 	/**
 	 * Execute 'next' for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
+	/**
+	 * Optional granularity to step. If no granularity is specified, a granularity of 'statement' is assumed.
+	 * <p>
+	 * This is an optional property.
+	 */
+	SteppingGranularity granularity;
 }
 
 /**
@@ -862,14 +1181,19 @@ class StepInArguments {
 	/**
 	 * Execute 'stepIn' for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 	/**
 	 * Optional id of the target to step into.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long targetId;
+	Integer targetId;
+	/**
+	 * Optional granularity to step. If no granularity is specified, a granularity of 'statement' is assumed.
+	 * <p>
+	 * This is an optional property.
+	 */
+	SteppingGranularity granularity;
 }
 
 /**
@@ -880,8 +1204,13 @@ class StepOutArguments {
 	/**
 	 * Execute 'stepOut' for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
+	/**
+	 * Optional granularity to step. If no granularity is specified, a granularity of 'statement' is assumed.
+	 * <p>
+	 * This is an optional property.
+	 */
+	SteppingGranularity granularity;
 }
 
 /**
@@ -892,8 +1221,13 @@ class StepBackArguments {
 	/**
 	 * Execute 'stepBack' for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
+	/**
+	 * Optional granularity to step. If no granularity is specified, a granularity of 'statement' is assumed.
+	 * <p>
+	 * This is an optional property.
+	 */
+	SteppingGranularity granularity;
 }
 
 /**
@@ -904,8 +1238,7 @@ class ReverseContinueArguments {
 	/**
 	 * Execute 'reverseContinue' for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 }
 
 /**
@@ -916,8 +1249,7 @@ class RestartFrameArguments {
 	/**
 	 * Restart this stackframe.
 	 */
-	@NonNull
-	Long frameId;
+	int frameId;
 }
 
 /**
@@ -928,13 +1260,11 @@ class GotoArguments {
 	/**
 	 * Set the goto target for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 	/**
 	 * The location where the debuggee will continue to run.
 	 */
-	@NonNull
-	Long targetId;
+	int targetId;
 }
 
 /**
@@ -945,8 +1275,7 @@ class PauseArguments {
 	/**
 	 * Pause execution for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 }
 
 /**
@@ -962,11 +1291,14 @@ class StackTraceResponse {
 	@NonNull
 	StackFrame[] stackFrames;
 	/**
-	 * The total number of frames available.
+	 * The total number of frames available in the stack. If omitted or if totalFrames is larger than the available
+	 * frames, a client is expected to request frames until a request returns less frames than requested (which
+	 * indicates the end of the stack). Returning monotonically increasing totalFrames values for subsequent requests
+	 * can be used to enforce paging in the client.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long totalFrames;
+	Integer totalFrames;
 }
 
 /**
@@ -977,22 +1309,23 @@ class StackTraceArguments {
 	/**
 	 * Retrieve the stacktrace for this thread.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 	/**
 	 * The index of the first frame to return; if omitted frames start at 0.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long startFrame;
+	Integer startFrame;
 	/**
 	 * The maximum number of frames to return. If levels is not specified or 0, all frames are returned.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long levels;
+	Integer levels;
 	/**
 	 * Specifies details on how to format the stack frames.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsValueFormattingOptions' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -1019,8 +1352,7 @@ class ScopesArguments {
 	/**
 	 * Retrieve the scopes for this stackframe.
 	 */
-	@NonNull
-	Long frameId;
+	int frameId;
 }
 
 /**
@@ -1043,8 +1375,7 @@ class VariablesArguments {
 	/**
 	 * The Variable reference.
 	 */
-	@NonNull
-	Long variablesReference;
+	int variablesReference;
 	/**
 	 * Optional filter to limit the child variables to either named or indexed. If omitted, both types are fetched.
 	 * <p>
@@ -1056,15 +1387,17 @@ class VariablesArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long start;
+	Integer start;
 	/**
 	 * The number of variables to return. If count is missing or 0, all variables are returned.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long count;
+	Integer count;
 	/**
 	 * Specifies details on how to format the Variable values.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsValueFormattingOptions' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -1096,28 +1429,34 @@ class SetVariableResponse {
 	 */
 	String type;
 	/**
-	 * If variablesReference is > 0, the new value is structured and its children can be retrieved by passing
+	 * If variablesReference is &gt; 0, the new value is structured and its children can be retrieved by passing
 	 * variablesReference to the VariablesRequest.
+	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long variablesReference;
+	Integer variablesReference;
 	/**
 	 * The number of named child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
+	 * <p>
 	 * This is an optional property.
 	 */
-	Long namedVariables;
+	Integer namedVariables;
 	/**
 	 * The number of indexed child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
+	 * <p>
 	 * This is an optional property.
 	 */
-	Long indexedVariables;
+	Integer indexedVariables;
 }
 
 /**
@@ -1128,8 +1467,7 @@ class SetVariableArguments {
 	/**
 	 * The reference of the variable container.
 	 */
-	@NonNull
-	Long variablesReference;
+	int variablesReference;
 	/**
 	 * The name of the variable in the container.
 	 */
@@ -1178,11 +1516,11 @@ class SourceArguments {
 	 */
 	Source source;
 	/**
-	 * The reference to the source. This is the same as source.sourceReference. This is provided for backward
-	 * compatibility since old backends do not understand the 'source' attribute.
+	 * The reference to the source. This is the same as source.sourceReference.
+	 * <p>
+	 * This is provided for backward compatibility since old backends do not understand the 'source' attribute.
 	 */
-	@NonNull
-	Long sourceReference;
+	int sourceReference;
 }
 
 /**
@@ -1207,7 +1545,7 @@ class TerminateThreadsArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long[] threadIds;
+	int[] threadIds;
 }
 
 /**
@@ -1225,7 +1563,7 @@ class ModulesResponse {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long totalModules;
+	Integer totalModules;
 }
 
 /**
@@ -1238,13 +1576,13 @@ class ModulesArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long startModule;
+	Integer startModule;
 	/**
 	 * The number of modules to return. If moduleCount is not specified or 0, all modules are returned.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long moduleCount;
+	Integer moduleCount;
 }
 
 /**
@@ -1279,6 +1617,9 @@ class EvaluateResponse {
 	/**
 	 * The optional type of the evaluate result.
 	 * <p>
+	 * This attribute should only be returned by a debug adapter if the client has passed the value true for the
+	 * 'supportsVariableType' capability of the 'initialize' request.
+	 * <p>
 	 * This is an optional property.
 	 */
 	String type;
@@ -1289,34 +1630,43 @@ class EvaluateResponse {
 	 */
 	VariablePresentationHint presentationHint;
 	/**
-	 * If variablesReference is > 0, the evaluate result is structured and its children can be retrieved by passing
+	 * If variablesReference is &gt; 0, the evaluate result is structured and its children can be retrieved by passing
 	 * variablesReference to the VariablesRequest.
+	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
 	 */
-	@NonNull
-	Long variablesReference;
+	int variablesReference;
 	/**
 	 * The number of named child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
+	 * <p>
 	 * This is an optional property.
 	 */
-	Long namedVariables;
+	Integer namedVariables;
 	/**
 	 * The number of indexed child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
-	 * This is an optional property.
-	 */
-	Long indexedVariables;
-	/**
-	 * Memory reference to a location appropriate for this result. For pointer type eval results, this is generally a
-	 * reference to the memory address contained in the pointer.
+	 * The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long memoryReference;
+	Integer indexedVariables;
+	/**
+	 * Optional memory reference to a location appropriate for this result.
+	 * <p>
+	 * For pointer type eval results, this is generally a reference to the memory address contained in the pointer.
+	 * <p>
+	 * This attribute should be returned by a debug adapter if the client has passed the value true for the
+	 * 'supportsMemoryReferences' capability of the 'initialize' request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String memoryReference;
 }
 
 /**
@@ -1335,7 +1685,7 @@ class EvaluateArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long frameId;
+	Integer frameId;
 	/**
 	 * The context in which the evaluate request is run.
 	 * <p>
@@ -1346,6 +1696,8 @@ class EvaluateArguments {
 	String context;
 	/**
 	 * Specifies details on how to format the Evaluate result.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsValueFormattingOptions' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -1370,6 +1722,12 @@ interface EvaluateArgumentsContext {
 	 * evaluate is run from a data hover.
 	 */
 	public static final String HOVER = "hover";
+	/**
+	 * evaluate is run to generate the value that will be stored in the clipboard.
+	 * The attribute is only honored by a
+	 * debug adapter if the capability 'supportsClipboardContext' is true.
+	 */
+	public static final String CLIPBOARD = "clipboard";
 }
 
 /**
@@ -1385,6 +1743,9 @@ class SetExpressionResponse {
 	/**
 	 * The optional type of the value.
 	 * <p>
+	 * This attribute should only be returned by a debug adapter if the client has passed the value true for the
+	 * 'supportsVariableType' capability of the 'initialize' request.
+	 * <p>
 	 * This is an optional property.
 	 */
 	String type;
@@ -1395,28 +1756,34 @@ class SetExpressionResponse {
 	 */
 	VariablePresentationHint presentationHint;
 	/**
-	 * If variablesReference is > 0, the value is structured and its children can be retrieved by passing
+	 * If variablesReference is &gt; 0, the value is structured and its children can be retrieved by passing
 	 * variablesReference to the VariablesRequest.
+	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long variablesReference;
+	Integer variablesReference;
 	/**
 	 * The number of named child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
+	 * <p>
 	 * This is an optional property.
 	 */
-	Long namedVariables;
+	Integer namedVariables;
 	/**
 	 * The number of indexed child variables.
 	 * <p>
 	 * The client can use this optional information to present the variables in a paged UI and fetch them in chunks.
 	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
+	 * <p>
 	 * This is an optional property.
 	 */
-	Long indexedVariables;
+	Integer indexedVariables;
 }
 
 /**
@@ -1440,7 +1807,7 @@ class SetExpressionArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long frameId;
+	Integer frameId;
 	/**
 	 * Specifies how the resulting value should be formatted.
 	 * <p>
@@ -1469,8 +1836,7 @@ class StepInTargetsArguments {
 	/**
 	 * The stack frame for which to retrieve the possible stepIn targets.
 	 */
-	@NonNull
-	Long frameId;
+	int frameId;
 }
 
 /**
@@ -1498,14 +1864,13 @@ class GotoTargetsArguments {
 	/**
 	 * The line location for which the goto targets are determined.
 	 */
-	@NonNull
-	Long line;
+	int line;
 	/**
 	 * An optional column location for which the goto targets are determined.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 }
 
 /**
@@ -1531,7 +1896,7 @@ class CompletionsArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long frameId;
+	Integer frameId;
 	/**
 	 * One or more source lines. Typically this is the text a user has typed into the debug console before he asked
 	 * for completion.
@@ -1541,15 +1906,14 @@ class CompletionsArguments {
 	/**
 	 * The character position for which to determine the completion proposals.
 	 */
-	@NonNull
-	Long column;
+	int column;
 	/**
 	 * An optional line for which to determine the completion proposals. If missing the first line of the text is
 	 * assumed.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long line;
+	Integer line;
 }
 
 /**
@@ -1589,8 +1953,7 @@ class ExceptionInfoArguments {
 	/**
 	 * Thread for which exception information should be retrieved.
 	 */
-	@NonNull
-	Long threadId;
+	int threadId;
 }
 
 /**
@@ -1599,18 +1962,21 @@ class ExceptionInfoArguments {
 @JsonRpcData
 class ReadMemoryResponse {
 	/**
-	 * The address of the first byte of data returned. Treated as a hex value if prefixed with '0x', or as a
-	 * decimal value otherwise.
+	 * The address of the first byte of data returned.
+	 * <p>
+	 * Treated as a hex value if prefixed with '0x', or as a decimal value otherwise.
 	 */
 	@NonNull
 	String address;
 	/**
-	 * The number of unreadable bytes encountered after the last successfully read byte. This can be used to
-	 * determine the number of bytes that must be skipped before a subsequent 'readMemory' request will succeed.
+	 * The number of unreadable bytes encountered after the last successfully read byte.
+	 * <p>
+	 * This can be used to determine the number of bytes that must be skipped before a subsequent 'readMemory' request
+	 * will succeed.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long unreadableBytes;
+	Integer unreadableBytes;
 	/**
 	 * The bytes read from memory, encoded using base64.
 	 * <p>
@@ -1634,13 +2000,11 @@ class ReadMemoryArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long offset;
+	Integer offset;
 	/**
 	 * Number of bytes to read at the specified location and offset.
-	 * <p>
-	 * This is an optional property.
 	 */
-	Long count;
+	int count;
 }
 
 /**
@@ -1670,21 +2034,21 @@ class DisassembleArguments {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long offset;
+	Integer offset;
 	/**
 	 * Optional offset (in instructions) to be applied after the byte offset (if any) before disassembling. Can be
 	 * negative.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long instructionOffset;
+	Integer instructionOffset;
 	/**
-	 * Number of instructions to disassemble starting at the specified location and offset. An adapter must return
-	 * exactly this number of instructions - any unavailable instructions should be replaced with an
-	 * implementation-defined 'invalid instruction' value.
+	 * Number of instructions to disassemble starting at the specified location and offset.
+	 * <p>
+	 * An adapter must return exactly this number of instructions - any unavailable instructions should be replaced
+	 * with an implementation-defined 'invalid instruction' value.
 	 */
-	@NonNull
-	Long instructionCount;
+	int instructionCount;
 	/**
 	 * If true, the adapter should attempt to resolve memory addresses and other values to symbolic names.
 	 * <p>
@@ -1729,7 +2093,7 @@ class Capabilities {
 	 */
 	Boolean supportsEvaluateForHovers;
 	/**
-	 * Available filters or options for the setExceptionBreakpoints request.
+	 * Available exception filter options for the 'setExceptionBreakpoints' request.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -1770,6 +2134,13 @@ class Capabilities {
 	 * This is an optional property.
 	 */
 	Boolean supportsCompletionsRequest;
+	/**
+	 * The set of characters that should trigger completion in a REPL. If not specified, the UI should assume the '.'
+	 * character.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String[] completionTriggerCharacters;
 	/**
 	 * The debug adapter supports the 'modules' request.
 	 * <p>
@@ -1822,7 +2193,7 @@ class Capabilities {
 	Boolean supportTerminateDebuggee;
 	/**
 	 * The debug adapter supports the delayed loading of parts of the stack, which requires that both the 'startFrame'
-	 * and 'levels' arguments and the 'totalFrames' result of the 'StackTrace' request are supported.
+	 * and 'levels' arguments and an optional 'totalFrames' result of the 'StackTrace' request are supported.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -1875,30 +2246,74 @@ class Capabilities {
 	 * This is an optional property.
 	 */
 	Boolean supportsDisassembleRequest;
+	/**
+	 * The debug adapter supports the 'cancel' request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsCancelRequest;
+	/**
+	 * The debug adapter supports the 'breakpointLocations' request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsBreakpointLocationsRequest;
+	/**
+	 * The debug adapter supports the 'clipboard' context value in the 'evaluate' request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsClipboardContext;
+	/**
+	 * The debug adapter supports stepping granularities (argument 'granularity') for the stepping requests.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsSteppingGranularity;
+	/**
+	 * The debug adapter supports adding breakpoints based on instruction references.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsInstructionBreakpoints;
+	/**
+	 * The debug adapter supports 'filterOptions' as an argument on the 'setExceptionBreakpoints' request.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsExceptionFilterOptions;
 }
 
 /**
- * An ExceptionBreakpointsFilter is shown in the UI as an option for configuring how exceptions are dealt with.
+ * An ExceptionBreakpointsFilter is shown in the UI as an filter option for configuring how exceptions are dealt
+ * with.
  */
 @JsonRpcData
 class ExceptionBreakpointsFilter {
 	/**
-	 * The internal ID of the filter. This value is passed to the setExceptionBreakpoints request.
+	 * The internal ID of the filter option. This value is passed to the 'setExceptionBreakpoints' request.
 	 */
 	@NonNull
 	String filter;
 	/**
-	 * The name of the filter. This will be shown in the UI.
+	 * The name of the filter option. This will be shown in the UI.
 	 */
 	@NonNull
 	String label;
 	/**
-	 * Initial value of the filter. If not specified a value 'false' is assumed.
+	 * Initial value of the filter option. If not specified a value 'false' is assumed.
 	 * <p>
 	 * This is an optional property.
 	 */
 	@SerializedName(value="default")
 	Boolean default_;
+	/**
+	 * Controls whether a condition can be specified for this filter option. If false or missing, a condition can not
+	 * be set.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Boolean supportsCondition;
 }
 
 /**
@@ -1909,8 +2324,7 @@ class Message {
 	/**
 	 * Unique identifier for the message.
 	 */
-	@NonNull
-	Long id;
+	int id;
 	/**
 	 * A format string for the message. Embedded variables have the form '{name}'.
 	 * <p>
@@ -1977,7 +2391,7 @@ class Module {
 	 * Unique identifier for the module.
 	 */
 	@NonNull
-	Either<Long, String> id;
+	Either<Integer, String> id;
 	/**
 	 * A name of the module.
 	 */
@@ -2043,6 +2457,7 @@ class Module {
 
 /**
  * A ColumnDescriptor specifies what module attribute to show in a column of the ModulesView, how to format it,
+ * <p>
  * and what the column's label should be.
  * <p>
  * It is only used if the underlying UI actually supports this level of customization.
@@ -2076,7 +2491,7 @@ class ColumnDescriptor {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long width;
+	Integer width;
 }
 
 /**
@@ -2112,8 +2527,7 @@ class Thread {
 	/**
 	 * Unique identifier for the thread.
 	 */
-	@NonNull
-	Long id;
+	int id;
 	/**
 	 * A name of the thread.
 	 */
@@ -2122,35 +2536,46 @@ class Thread {
 }
 
 /**
- * A Source is a descriptor for source code. It is returned from the debug adapter as part of a StackFrame and it
- * is used by clients when specifying breakpoints.
+ * A Source is a descriptor for source code.
+ * <p>
+ * It is returned from the debug adapter as part of a StackFrame and it is used by clients when specifying
+ * breakpoints.
  */
 @JsonRpcData
 class Source {
 	/**
-	 * The short name of the source. Every source returned from the debug adapter has a name. When sending a source to
-	 * the debug adapter this name is optional.
+	 * The short name of the source. Every source returned from the debug adapter has a name.
+	 * <p>
+	 * When sending a source to the debug adapter this name is optional.
 	 * <p>
 	 * This is an optional property.
 	 */
 	String name;
 	/**
-	 * The path of the source to be shown in the UI. It is only used to locate and load the content of the source if
-	 * no sourceReference is specified (or its value is 0).
+	 * The path of the source to be shown in the UI.
+	 * <p>
+	 * It is only used to locate and load the content of the source if no sourceReference is specified (or its value
+	 * is 0).
 	 * <p>
 	 * This is an optional property.
 	 */
 	String path;
 	/**
-	 * If sourceReference > 0 the contents of the source must be retrieved through the SourceRequest (even if a path
-	 * is specified). A sourceReference is only valid for a session, so it must not be used to persist a source.
+	 * If sourceReference &gt; 0 the contents of the source must be retrieved through the SourceRequest (even if a
+	 * path is specified).
+	 * <p>
+	 * A sourceReference is only valid for a session, so it must not be used to persist a source.
+	 * <p>
+	 * The value should be less than or equal to 2147483647 (2^31-1).
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long sourceReference;
+	Integer sourceReference;
 	/**
-	 * An optional hint for how to present the source in the UI. A value of 'deemphasize' can be used to indicate that
-	 * the source is not available or that it is skipped on stepping.
+	 * An optional hint for how to present the source in the UI.
+	 * <p>
+	 * A value of 'deemphasize' can be used to indicate that the source is not available or that it is skipped on
+	 * stepping.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2170,8 +2595,10 @@ class Source {
 	 */
 	Source[] sources;
 	/**
-	 * Optional data that a debug adapter might want to loop through the client. The client should leave the data
-	 * intact and persist it across sessions. The client should not interpret the data.
+	 * Optional data that a debug adapter might want to loop through the client.
+	 * <p>
+	 * The client should leave the data intact and persist it across sessions. The client should not interpret the
+	 * data.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2185,8 +2612,10 @@ class Source {
 }
 
 /**
- * An optional hint for how to present the source in the UI. A value of 'deemphasize' can be used to indicate that
- * the source is not available or that it is skipped on stepping.
+ * An optional hint for how to present the source in the UI.
+ * <p>
+ * A value of 'deemphasize' can be used to indicate that the source is not available or that it is skipped on
+ * stepping.
  */
 enum SourcePresentationHint {
 	NORMAL,
@@ -2200,11 +2629,12 @@ enum SourcePresentationHint {
 @JsonRpcData
 class StackFrame {
 	/**
-	 * An identifier for the stack frame. It must be unique across all threads. This id can be used to retrieve the
-	 * scopes of the frame with the 'scopesRequest' or to restart the execution of a stackframe.
+	 * An identifier for the stack frame. It must be unique across all threads.
+	 * <p>
+	 * This id can be used to retrieve the scopes of the frame with the 'scopesRequest' or to restart the execution of
+	 * a stackframe.
 	 */
-	@NonNull
-	Long id;
+	int id;
 	/**
 	 * The name of the stack frame, typically a method name.
 	 */
@@ -2219,25 +2649,23 @@ class StackFrame {
 	/**
 	 * The line within the file of the frame. If source is null or doesn't exist, line is 0 and must be ignored.
 	 */
-	@NonNull
-	Long line;
+	int line;
 	/**
 	 * The column within the line. If source is null or doesn't exist, column is 0 and must be ignored.
 	 */
-	@NonNull
-	Long column;
+	int column;
 	/**
 	 * An optional end line of the range covered by the stack frame.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endLine;
+	Integer endLine;
 	/**
 	 * An optional end column of the range covered by the stack frame.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endColumn;
+	Integer endColumn;
 	/**
 	 * Optional memory reference for the current instruction pointer in this frame.
 	 * <p>
@@ -2249,11 +2677,12 @@ class StackFrame {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Either<Long, String> moduleId;
+	Either<Integer, String> moduleId;
 	/**
-	 * An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the
-	 * frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to
-	 * change the appearance of a frame in a 'subtle' way.
+	 * An optional hint for how to present this frame in the UI.
+	 * <p>
+	 * A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label
+	 * or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2261,9 +2690,10 @@ class StackFrame {
 }
 
 /**
- * An optional hint for how to present this frame in the UI. A value of 'label' can be used to indicate that the
- * frame is an artificial frame that is used as a visual label or separator. A value of 'subtle' can be used to
- * change the appearance of a frame in a 'subtle' way.
+ * An optional hint for how to present this frame in the UI.
+ * <p>
+ * A value of 'label' can be used to indicate that the frame is an artificial frame that is used as a visual label
+ * or separator. A value of 'subtle' can be used to change the appearance of a frame in a 'subtle' way.
  */
 enum StackFramePresentationHint {
 	NORMAL,
@@ -2277,24 +2707,25 @@ enum StackFramePresentationHint {
 @JsonRpcData
 class Scope {
 	/**
-	 * Name of the scope such as 'Arguments', 'Locals', or 'Registers'. This string is shown in the
-	 * UI as is and can be translated.
+	 * Name of the scope such as 'Arguments', 'Locals', or 'Registers'. This string is shown in the UI as is and can
+	 * be translated.
 	 */
 	@NonNull
 	String name;
 	/**
-	 * An optional hint for how to present this scope in the UI. If this attribute is missing, the scope is shown with a
-	 * generic UI.
+	 * An optional hint for how to present this scope in the UI. If this attribute is missing, the scope is shown with
+	 * a generic UI.
 	 * <p>
 	 * This is an optional property.
+	 * <p>
+	 * Possible values include - but not limited to those defined in {@link ScopePresentationHint}
 	 */
-	ScopePresentationHint presentationHint;
+	String presentationHint;
 	/**
 	 * The variables of this scope can be retrieved by passing the value of variablesReference to the
 	 * VariablesRequest.
 	 */
-	@NonNull
-	Long variablesReference;
+	int variablesReference;
 	/**
 	 * The number of named variables in this scope.
 	 * <p>
@@ -2302,7 +2733,7 @@ class Scope {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long namedVariables;
+	Integer namedVariables;
 	/**
 	 * The number of indexed variables in this scope.
 	 * <p>
@@ -2310,12 +2741,11 @@ class Scope {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long indexedVariables;
+	Integer indexedVariables;
 	/**
 	 * If true, the number of variables in this scope is large or expensive to retrieve.
 	 */
-	@NonNull
-	Boolean expensive;
+	boolean expensive;
 	/**
 	 * Optional source for this scope.
 	 * <p>
@@ -2327,44 +2757,46 @@ class Scope {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long line;
+	Integer line;
 	/**
 	 * Optional start column of the range covered by this scope.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * Optional end line of the range covered by this scope.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endLine;
+	Integer endLine;
 	/**
 	 * Optional end column of the range covered by this scope.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endColumn;
+	Integer endColumn;
 }
 
 /**
- * An optional hint for how to present this scope in the UI. If this attribute is missing, the scope is shown with a
- * generic UI.
+ * An optional hint for how to present this scope in the UI. If this attribute is missing, the scope is shown with
+ * a generic UI.
+ * <p>
+ * Possible values include - but not limited to those defined in {@link ScopePresentationHint}
  */
-enum ScopePresentationHint {
+interface ScopePresentationHint {
 	/**
 	 * Scope contains method arguments.
 	 */
-	ARGUMENTS,
+	public static final String ARGUMENTS = "arguments";
 	/**
 	 * Scope contains local variables.
 	 */
-	LOCALS,
+	public static final String LOCALS = "locals";
 	/**
 	 * Scope contains registers. Only a single 'registers' scope should be returned from a 'scopes' request.
 	 */
-	REGISTERS
+	public static final String REGISTERS = "registers";
 }
 
 /**
@@ -2399,6 +2831,9 @@ class Variable {
 	/**
 	 * The type of the variable's value. Typically shown in the UI when hovering over the value.
 	 * <p>
+	 * This attribute should only be returned by a debug adapter if the client has passed the value true for the
+	 * 'supportsVariableType' capability of the 'initialize' request.
+	 * <p>
 	 * This is an optional property.
 	 */
 	String type;
@@ -2416,11 +2851,10 @@ class Variable {
 	 */
 	String evaluateName;
 	/**
-	 * If variablesReference is > 0, the variable is structured and its children can be retrieved by passing
+	 * If variablesReference is &gt; 0, the variable is structured and its children can be retrieved by passing
 	 * variablesReference to the VariablesRequest.
 	 */
-	@NonNull
-	Long variablesReference;
+	int variablesReference;
 	/**
 	 * The number of named child variables.
 	 * <p>
@@ -2428,7 +2862,7 @@ class Variable {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long namedVariables;
+	Integer namedVariables;
 	/**
 	 * The number of indexed child variables.
 	 * <p>
@@ -2436,9 +2870,13 @@ class Variable {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long indexedVariables;
+	Integer indexedVariables;
 	/**
-	 * Optional memory reference for the variable if the variable represents executable code, such as a function pointer.
+	 * Optional memory reference for the variable if the variable represents executable code, such as a function
+	 * pointer.
+	 * <p>
+	 * This attribute is only required if the client has passed the value true for the 'supportsMemoryReferences'
+	 * capability of the 'initialize' request.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2520,13 +2958,18 @@ interface VariablePresentationHintKind {
 	 */
 	public static final String MOST_DERIVED_CLASS = "mostDerivedClass";
 	/**
-	 * Indicates that the object is virtual, that means it is a synthetic object introduced by the adapter for
+	 * Indicates that the object is virtual, that means it is a synthetic object introducedby the
+	 * adapter for
 	 * rendering purposes, e.g. an index range for large arrays.
 	 */
 	public static final String VIRTUAL = "virtual";
 	/**
-	 * Indicates that a data breakpoint is registered for the object.
+	 * Deprecated: Indicates that a data breakpoint is registered for the object. The 'hasDataBreakpoint' attribute
+	 * should generally be used instead.
+	 * <p>
+	 * @deprecated The 'hasDataBreakpoint' attribute should generally be used instead.
 	 */
+	@Deprecated
 	public static final String DATA_BREAKPOINT = "dataBreakpoint";
 }
 
@@ -2564,6 +3007,10 @@ interface VariablePresentationHintAttributes {
 	 * Indicates that the evaluation had side effects.
 	 */
 	public static final String HAS_SIDE_EFFECTS = "hasSideEffects";
+	/**
+	 * Indicates that the object has its value tracked by a data breakpoint.
+	 */
+	public static final String HAS_DATA_BREAKPOINT = "hasDataBreakpoint";
 }
 
 /**
@@ -2580,6 +3027,35 @@ interface VariablePresentationHintVisibility {
 }
 
 /**
+ * Properties of a breakpoint location returned from the 'breakpointLocations' request.
+ */
+@JsonRpcData
+class BreakpointLocation {
+	/**
+	 * Start line of breakpoint location.
+	 */
+	int line;
+	/**
+	 * Optional start column of breakpoint location.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer column;
+	/**
+	 * Optional end line of breakpoint location if the location covers a range.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer endLine;
+	/**
+	 * Optional end column of breakpoint location if the location covers a range.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer endColumn;
+}
+
+/**
  * Properties of a breakpoint or logpoint passed to the setBreakpoints request.
  */
 @JsonRpcData
@@ -2587,30 +3063,37 @@ class SourceBreakpoint {
 	/**
 	 * The source line of the breakpoint or logpoint.
 	 */
-	@NonNull
-	Long line;
+	int line;
 	/**
 	 * An optional source column of the breakpoint.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * An optional expression for conditional breakpoints.
+	 * <p>
+	 * It is only honored by a debug adapter if the capability 'supportsConditionalBreakpoints' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
 	String condition;
 	/**
-	 * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to
-	 * interpret the expression as needed.
+	 * An optional expression that controls how many hits of the breakpoint are ignored.
+	 * <p>
+	 * The backend is expected to interpret the expression as needed.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsHitConditionalBreakpoints' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
 	String hitCondition;
 	/**
-	 * If this attribute exists and is non-empty, the backend must not 'break' (stop) but log the message instead.
-	 * Expressions within {} are interpolated.
+	 * If this attribute exists and is non-empty, the backend must not 'break' (stop)
+	 * <p>
+	 * but log the message instead. Expressions within {} are interpolated.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsLogPoints' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2630,12 +3113,17 @@ class FunctionBreakpoint {
 	/**
 	 * An optional expression for conditional breakpoints.
 	 * <p>
+	 * It is only honored by a debug adapter if the capability 'supportsConditionalBreakpoints' is true.
+	 * <p>
 	 * This is an optional property.
 	 */
 	String condition;
 	/**
-	 * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to
-	 * interpret the expression as needed.
+	 * An optional expression that controls how many hits of the breakpoint are ignored.
+	 * <p>
+	 * The backend is expected to interpret the expression as needed.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsHitConditionalBreakpoints' is true.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2648,7 +3136,6 @@ class FunctionBreakpoint {
 enum DataBreakpointAccessType {
 	READ,
 	WRITE,
-	@SerializedName("readWrite")
 	READ_WRITE
 }
 
@@ -2675,8 +3162,9 @@ class DataBreakpoint {
 	 */
 	String condition;
 	/**
-	 * An optional expression that controls how many hits of the breakpoint are ignored. The backend is expected to
-	 * interpret the expression as needed.
+	 * An optional expression that controls how many hits of the breakpoint are ignored.
+	 * <p>
+	 * The backend is expected to interpret the expression as needed.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2684,25 +3172,67 @@ class DataBreakpoint {
 }
 
 /**
- * Information about a Breakpoint created in setBreakpoints or setFunctionBreakpoints.
+ * Properties of a breakpoint passed to the setInstructionBreakpoints request
+ */
+@JsonRpcData
+class InstructionBreakpoint {
+	/**
+	 * The instruction reference of the breakpoint.
+	 * <p>
+	 * This should be a memory or instruction pointer reference from an EvaluateResponse, Variable, StackFrame,
+	 * GotoTarget, or Breakpoint.
+	 */
+	@NonNull
+	String instructionReference;
+	/**
+	 * An optional offset from the instruction reference.
+	 * <p>
+	 * This can be negative.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer offset;
+	/**
+	 * An optional expression for conditional breakpoints.
+	 * <p>
+	 * It is only honored by a debug adapter if the capability 'supportsConditionalBreakpoints' is true.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String condition;
+	/**
+	 * An optional expression that controls how many hits of the breakpoint are ignored.
+	 * <p>
+	 * The backend is expected to interpret the expression as needed.
+	 * <p>
+	 * The attribute is only honored by a debug adapter if the capability 'supportsHitConditionalBreakpoints' is true.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String hitCondition;
+}
+
+/**
+ * Information about a Breakpoint created in setBreakpoints, setFunctionBreakpoints, setInstructionBreakpoints, or
+ * setDataBreakpoints.
  */
 @JsonRpcData
 class Breakpoint {
 	/**
-	 * An optional unique identifier for the breakpoint. It is needed if breakpoint events are used to update or remove
+	 * An optional identifier for the breakpoint. It is needed if breakpoint events are used to update or remove
 	 * breakpoints.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long id;
+	Integer id;
 	/**
 	 * If true breakpoint could be set (but not necessarily at the desired location).
 	 */
-	@NonNull
-	Boolean verified;
+	boolean verified;
 	/**
-	 * An optional message about the state of the breakpoint. This is shown to the user and can be used to explain why
-	 * a breakpoint could not be verified.
+	 * An optional message about the state of the breakpoint.
+	 * <p>
+	 * This is shown to the user and can be used to explain why a breakpoint could not be verified.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -2718,26 +3248,63 @@ class Breakpoint {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long line;
+	Integer line;
 	/**
 	 * An optional start column of the actual range covered by the breakpoint.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * An optional end line of the actual range covered by the breakpoint.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endLine;
+	Integer endLine;
 	/**
-	 * An optional end column of the actual range covered by the breakpoint. If no end line is given, then the end
-	 * column is assumed to be in the start line.
+	 * An optional end column of the actual range covered by the breakpoint.
+	 * <p>
+	 * If no end line is given, then the end column is assumed to be in the start line.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endColumn;
+	Integer endColumn;
+	/**
+	 * An optional memory reference to where the breakpoint is set.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String instructionReference;
+	/**
+	 * An optional offset from the instruction reference.
+	 * <p>
+	 * This can be negative.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer offset;
+}
+
+/**
+ * The granularity of one 'step' in the stepping requests 'next', 'stepIn', 'stepOut', and 'stepBack'.
+ */
+enum SteppingGranularity {
+	/**
+	 * The step should allow the program to run until the current statement has finished executing.
+	 * The meaning of a
+	 * statement is determined by the adapter and it may be considered equivalent to a line.
+	 * For example 'for(int i =
+	 * 0; i &lt; 10; i++) could be considered to have 3 statements 'int i = 0', 'i &lt; 10', and 'i++'.
+	 */
+	STATEMENT,
+	/**
+	 * The step should allow the program to run until the current source line has executed.
+	 */
+	LINE,
+	/**
+	 * The step should allow one instruction to execute (e.g. one x86 instruction).
+	 */
+	INSTRUCTION
 }
 
 /**
@@ -2749,8 +3316,7 @@ class StepInTarget {
 	/**
 	 * Unique identifier for a stepIn target.
 	 */
-	@NonNull
-	Long id;
+	int id;
 	/**
 	 * The name of the stepIn target (shown in the UI).
 	 */
@@ -2768,8 +3334,7 @@ class GotoTarget {
 	/**
 	 * Unique identifier for a goto target. This is used in the goto request.
 	 */
-	@NonNull
-	Long id;
+	int id;
 	/**
 	 * The name of the goto target (shown in the UI).
 	 */
@@ -2778,31 +3343,30 @@ class GotoTarget {
 	/**
 	 * The line of the goto target.
 	 */
-	@NonNull
-	Long line;
+	int line;
 	/**
 	 * An optional column of the goto target.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * An optional end line of the range covered by the goto target.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endLine;
+	Integer endLine;
 	/**
 	 * An optional end column of the range covered by the goto target.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endColumn;
+	Integer endColumn;
 	/**
-	* Optional memory reference for the instruction pointer value represented by this target.
-	* <p>
-	* This is an optional property.
-	*/
+	 * Optional memory reference for the instruction pointer value represented by this target.
+	 * <p>
+	 * This is an optional property.
+	 */
 	String instructionPointerReference;
 }
 
@@ -2824,6 +3388,12 @@ class CompletionItem {
 	 */
 	String text;
 	/**
+	 * A string that should be used when comparing this item with other items. When `falsy` the label is used.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String sortText;
+	/**
 	 * The item's type. Typically the client uses this information to render the item in the UI with an icon.
 	 * <p>
 	 * This is an optional property.
@@ -2837,7 +3407,7 @@ class CompletionItem {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long start;
+	Integer start;
 	/**
 	 * This value determines how many characters are overwritten by the completion text.
 	 * <p>
@@ -2845,7 +3415,27 @@ class CompletionItem {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long length;
+	Integer length;
+	/**
+	 * Determines the start of the new selection after the text has been inserted (or replaced).
+	 * <p>
+	 * The start position must in the range 0 and length of the completion text.
+	 * <p>
+	 * If omitted the selection starts at the end of the completion text.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer selectionStart;
+	/**
+	 * Determines the length of the new selection after the text has been inserted (or replaced).
+	 * <p>
+	 * The selection can not extend beyond the bounds of the completion text.
+	 * <p>
+	 * If omitted the length is assumed to be 0.
+	 * <p>
+	 * This is an optional property.
+	 */
+	Integer selectionLength;
 }
 
 /**
@@ -2967,13 +3557,36 @@ class StackFrameFormat extends ValueFormat {
 }
 
 /**
+ * An ExceptionFilterOptions is used to specify an exception filter together with a condition for the
+ * setExceptionsFilter request.
+ */
+@JsonRpcData
+class ExceptionFilterOptions {
+	/**
+	 * ID of an exception filter returned by the 'exceptionBreakpointFilters' capability.
+	 */
+	@NonNull
+	String filterId;
+	/**
+	 * An optional expression for conditional exceptions.
+	 * <p>
+	 * The exception will break into the debugger if the result of the condition is true.
+	 * <p>
+	 * This is an optional property.
+	 */
+	String condition;
+}
+
+/**
  * An ExceptionOptions assigns configuration options to a set of exceptions.
  */
 @JsonRpcData
 class ExceptionOptions {
 	/**
 	 * A path that selects a single or multiple exceptions in a tree. If 'path' is missing, the whole tree is
-	 * selected. By convention the first segment of the path is a category that is used to group exceptions in the UI.
+	 * selected.
+	 * <p>
+	 * By convention the first segment of the path is a category that is used to group exceptions in the UI.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -3005,8 +3618,11 @@ enum ExceptionBreakMode {
 
 /**
  * An ExceptionPathSegment represents a segment in a path that is used to match leafs or nodes in a tree of
- * exceptions. If a segment consists of more than one name, it matches the names provided if 'negate' is false or
- * missing or it matches anything except the names provided if 'negate' is true.
+ * exceptions.
+ * <p>
+ * If a segment consists of more than one name, it matches the names provided if 'negate' is false or missing or
+ * <p>
+ * it matches anything except the names provided if 'negate' is true.
  */
 @JsonRpcData
 class ExceptionPathSegment {
@@ -3095,9 +3711,11 @@ class DisassembledInstruction {
 	 */
 	String symbol;
 	/**
-	 * Source location that corresponds to this instruction, if any. Should always be set (if available) on the first
-	 * instruction returned, but can be omitted afterwards if this instruction maps to the same source file as the
-	 * previous instruction.
+	 * Source location that corresponds to this instruction, if any.
+	 * <p>
+	 * Should always be set (if available) on the first instruction returned,
+	 * <p>
+	 * but can be omitted afterwards if this instruction maps to the same source file as the previous instruction.
 	 * <p>
 	 * This is an optional property.
 	 */
@@ -3107,23 +3725,47 @@ class DisassembledInstruction {
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long line;
+	Integer line;
 	/**
 	 * The column within the line that corresponds to this instruction, if any.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long column;
+	Integer column;
 	/**
 	 * The end line of the range that corresponds to this instruction, if any.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endLine;
+	Integer endLine;
 	/**
 	 * The end column of the range that corresponds to this instruction, if any.
 	 * <p>
 	 * This is an optional property.
 	 */
-	Long endColumn;
+	Integer endColumn;
+}
+
+/**
+ * Logical areas that can be invalidated by the 'invalidated' event.
+ * <p>
+ * Possible values include - but not limited to those defined in {@link InvalidatedAreas}
+ */
+interface InvalidatedAreas {
+	/**
+	 * All previously fetched data has become invalid and needs to be refetched.
+	 */
+	public static final String ALL = "all";
+	/**
+	 * Previously fetched stack related data has become invalid and needs to be refetched.
+	 */
+	public static final String STACKS = "stacks";
+	/**
+	 * Previously fetched thread related data has become invalid and needs to be refetched.
+	 */
+	public static final String THREADS = "threads";
+	/**
+	 * Previously fetched variable data has become invalid and needs to be refetched.
+	 */
+	public static final String VARIABLES = "variables";
 }

@@ -11,6 +11,9 @@
  ******************************************************************************/
 package org.eclipse.lsp4j;
 
+/**
+ * The kind of a completion entry.
+ */
 public enum CompletionItemKind {
 	
 	Text(1),

@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright (c) 2018 TypeFox and others.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0,
  * or the Eclipse Distribution License v. 1.0 which is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  ******************************************************************************/
 package org.eclipse.lsp4j.test
@@ -24,13 +24,14 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams
 import org.eclipse.lsp4j.DidCloseTextDocumentParams
 import org.eclipse.lsp4j.DidOpenTextDocumentParams
 import org.eclipse.lsp4j.DidSaveTextDocumentParams
+import org.eclipse.lsp4j.HoverParams
 import org.eclipse.lsp4j.InitializeParams
 import org.eclipse.lsp4j.MessageParams
 import org.eclipse.lsp4j.Position
 import org.eclipse.lsp4j.PublishDiagnosticsParams
+import org.eclipse.lsp4j.ShowDocumentParams;
 import org.eclipse.lsp4j.ShowMessageRequestParams
 import org.eclipse.lsp4j.TextDocumentIdentifier
-import org.eclipse.lsp4j.TextDocumentPositionParams
 import org.eclipse.lsp4j.jsonrpc.services.GenericEndpoint
 import org.eclipse.lsp4j.launch.LSPLauncher
 import org.eclipse.lsp4j.services.LanguageClient
@@ -43,9 +44,9 @@ import org.junit.Test
 import static org.junit.Assert.*
 
 class LSPEndpointTest {
-	
+
 	static val TIMEOUT = 2000
-	
+
 	@Test
 	def void testIssue152() throws Exception {
 		val client = new DummyClient
@@ -56,15 +57,15 @@ class LSPEndpointTest {
 		val out = new ByteArrayOutputStream
 		val launcher = LSPLauncher.createClientLauncher(client, in, out, true, null)
 		val future = launcher.startListening()
-		
-		val hoverResult = launcher.remoteProxy.textDocumentService.hover(new TextDocumentPositionParams => [
+
+		val hoverResult = launcher.remoteProxy.textDocumentService.hover(new HoverParams => [
 			textDocument = new TextDocumentIdentifier('foo')
 			position = new Position(0, 0)
 		])
 		responseWriter.write('Content-Length: 60\r\n\r\n')
 		responseWriter.write('{"jsonrpc":"2.0","id":"1","result":{"contents":[null,null]}}')
 		responseWriter.flush()
-		
+
 		try {
 			hoverResult.join()
 			fail('Expected a CompletionException to be thrown.')
@@ -72,19 +73,19 @@ class LSPEndpointTest {
 			assertEquals('''
 				Lists must not contain null references. Path: $.result.contents[0]
 				Lists must not contain null references. Path: $.result.contents[1]
-			'''.toString.trim, exception.cause.message)
+			'''.toString.replaceAll("\\r", "").trim, exception.cause.message)
 			assertFalse(future.isDone)
 		} finally {
 			in.close()
 		}
 	}
-	
+
 	@Test
 	def void testIssue346() throws Exception {
 		val logMessages = new LogMessageAccumulator
 		try {
 			logMessages.registerTo(GenericEndpoint)
-			
+
 			val server = new DummyServer
 			val in = new PipedInputStream
 			val messageStream = new PipedOutputStream
@@ -93,47 +94,48 @@ class LSPEndpointTest {
 			val out = new ByteArrayOutputStream
 			val launcher = LSPLauncher.createServerLauncher(server, in, out, true, null)
 			launcher.startListening()
-			
+
 			messageWriter.write('Content-Length: 48\r\n\r\n')
 			messageWriter.write('{"jsonrpc": "2.0","method": "exit","params": {}}')
 			messageWriter.flush()
-			
+
 			server.exited.get(TIMEOUT, TimeUnit.MILLISECONDS)
 			assertTrue(logMessages.records.join('\n', [message]), logMessages.records.isEmpty)
 		} finally {
 			logMessages.unregister();
 		}
 	}
-	
+
 	@Accessors
 	private static class DummyServer implements LanguageServer {
-		
+
 		val textDocumentService = new TextDocumentService {
 			override didChange(DidChangeTextDocumentParams params) {}
 			override didClose(DidCloseTextDocumentParams params) {}
 			override didOpen(DidOpenTextDocumentParams params) {}
 			override didSave(DidSaveTextDocumentParams params) {}
 		}
-		
+
 		val workspaceService = new WorkspaceService {
 			override didChangeConfiguration(DidChangeConfigurationParams params) {}
 			override didChangeWatchedFiles(DidChangeWatchedFilesParams params) {}
 		}
-		
+
 		override initialize(InitializeParams params) {}
 		override shutdown() {}
-		
+
 		val exited = new CompletableFuture<Void>
 		override exit() {
 			exited.complete(null)
 		}
 	}
-	
+
 	private static class DummyClient implements LanguageClient {
 		override logMessage(MessageParams message) {}
 		override publishDiagnostics(PublishDiagnosticsParams diagnostics) {}
 		override showMessage(MessageParams messageParams) {}
 		override showMessageRequest(ShowMessageRequestParams requestParams) {}
+		override showDocument(ShowDocumentParams requestParams) {}
 		override telemetryEvent(Object object) {}
 	}
 

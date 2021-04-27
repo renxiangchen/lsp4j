@@ -11,25 +11,27 @@ A brief overview of how to use LSP4J to implement a server or a client can be fo
 
 #### Maven Repositories
 
- * [Maven Central](https://repo.maven.apache.org/maven2/org/eclipse/lsp4j/): https://repo.maven.apache.org/maven2/
- * [Bintray](https://bintray.com/bintray/jcenter/org.eclipse.lsp4j%3Aorg.eclipse.lsp4j/): https://jcenter.bintray.com/
+ * [Maven Central](https://repo.maven.apache.org/maven2/org/eclipse/lsp4j/): <https://repo.maven.apache.org/maven2/>
 
 #### p2 Update Sites
 
- * Releases: http://download.eclipse.org/lsp4j/updates/releases/
- * Milestones: http://download.eclipse.org/lsp4j/updates/milestones/
- * Nightly: http://services.typefox.io/open-source/jenkins/job/lsp4j/job/master/lastStableBuild/artifact/build/p2-repository/
+ * Releases: <http://download.eclipse.org/lsp4j/updates/releases/>
+ * Milestones: <http://download.eclipse.org/lsp4j/updates/milestones/>
+ * Nightly: <https://download.eclipse.org/lsp4j/builds/master/>
 
 #### Snapshots
 
-The snapshots are regularly deployed to:
- * https://oss.sonatype.org/content/repositories/snapshots/org/eclipse/lsp4j/
+The snapshots are deployed during the build to:
 
-Also, you can get them directly from the TypeFox Jenkins server:
- * http://services.typefox.io/open-source/jenkins/job/lsp4j/job/master/lastSuccessfulBuild/artifact/build/maven-repository/
+ * <https://oss.sonatype.org/content/repositories/snapshots/org/eclipse/lsp4j/>
 
 ### Supported LSP Versions
 
+ * LSP4J 0.13.&ast; &rarr; LSP 3.16.0
+ * LSP4J 0.12.&ast; &rarr; LSP 3.16.0
+ * LSP4J 0.11.&ast; &rarr; LSP 3.16.0
+ * LSP4J 0.10.&ast; &rarr; LSP 3.16.0 (specification is not finalized yet)
+ * LSP4J 0.9.&ast; &rarr; LSP 3.15.0 (except Progress)
  * LSP4J 0.7.&ast;, 0.8.&ast; &rarr; LSP 3.14.0
  * LSP4J 0.6.&ast; &rarr; LSP 3.13.0
  * LSP4J 0.5.&ast; &rarr; LSP 3.10.0
@@ -39,6 +41,11 @@ Also, you can get them directly from the TypeFox Jenkins server:
 
 ### Supported DAP Versions
 
+ * LSP4J 0.13.&ast; &rarr; DAP 1.44.0
+ * LSP4J 0.12.&ast; &rarr; DAP 1.44.0
+ * LSP4J 0.11.&ast; &rarr; DAP 1.44.0
+ * LSP4J 0.10.&ast; &rarr; DAP 1.42.0
+ * LSP4J 0.9.&ast; &rarr; DAP 1.37.0 (except CancelRequest)
  * LSP4J 0.8.&ast; &rarr; DAP 1.35.0
  * LSP4J 0.5.&ast; &ndash; 0.7.&ast; &rarr; DAP 1.31.0
  * LSP4J 0.4.&ast; &rarr; DAP 1.25.0

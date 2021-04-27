@@ -11,7 +11,12 @@
  ******************************************************************************/
 package org.eclipse.lsp4j.jsonrpc.test.json;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import java.util.Objects;
+import java.util.function.Function;
 
 import org.eclipse.lsp4j.jsonrpc.json.adapters.EitherTypeAdapter;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
@@ -21,9 +26,7 @@ import org.junit.Test;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import com.google.gson.JsonObject;
 
 
 public class EitherTest {
@@ -106,6 +109,35 @@ public class EitherTest {
 		assertFalse(either1.equals(either2));
 	}
 
+	@Test
+	public void testMap() {
+		Either<char[], String> either = Either.forLeft(new char[] { 'f', 'o', 'o' });
+		assertEquals("foo", either.map(
+				String::new,
+				String::toUpperCase));
+		either = Either.forRight("bar");
+		assertEquals("BAR", either.map(
+				String::new,
+				String::toUpperCase));
+	}
+
+	@Test
+	public void testMapEither3() {
+		Either3<String, Integer, Boolean> either3;
+		Function<String, String> mapFirst = s -> s.toUpperCase();
+		Function<Integer, String> mapSecond = x -> x.toString();
+		Function<Boolean, String> mapThird = b -> b.toString();
+
+		either3 = Either3.forFirst("abc");
+		assertEquals("ABC", either3.map(mapFirst, mapSecond, mapThird));
+
+		either3 = Either3.forSecond(123);
+		assertEquals("123", either3.map(mapFirst, mapSecond, mapThird));
+
+		either3 = Either3.forThird(Boolean.TRUE);
+		assertEquals("true", either3.map(mapFirst, mapSecond, mapThird));
+	}
+
 	protected static class MyObjectA {
 		public Either<String, Integer> myProperty;
 		public String otherProperty;
@@ -157,6 +189,78 @@ public class EitherTest {
 			if (myProperty != null)
 				return myProperty.hashCode();
 			return 0;
+		}
+	}
+
+	@Test
+	public void testSerializeJsonObject() {
+		MyObjectC object = new MyObjectC();
+		JsonObject jsonObject = new JsonObject();
+		jsonObject.addProperty("foo", "bar");
+		object.myProperty = Either.forRight(jsonObject);
+		assertSerialize("{\"myProperty\":{\"foo\":\"bar\"}}", object);
+	}
+
+	@Test
+	public void testParseJsonObject() {
+		MyObjectC object = new MyObjectC();
+		JsonObject jsonObject = new JsonObject();
+		jsonObject.addProperty("foo", "bar");
+		object.myProperty = Either.forRight(jsonObject);
+		assertParse(object, "{\"myProperty\":{\"foo\":\"bar\"}}");
+	}
+
+	protected static class MyObjectC {
+		public Either<String, Object> myProperty;
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj instanceof MyObjectC) {
+				MyObjectC other = (MyObjectC) obj;
+				return Objects.equals(this.myProperty, other.myProperty);
+			}
+			return false;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(this.myProperty);
+		}
+	}
+
+	@Test
+	public void testSerializeJsonObjectEither3() {
+		MyObjectD object = new MyObjectD();
+		JsonObject jsonObject = new JsonObject();
+		jsonObject.addProperty("foo", "bar");
+		object.myProperty = Either3.forThird(jsonObject);
+		assertSerialize("{\"myProperty\":{\"foo\":\"bar\"}}", object);
+	}
+
+	@Test
+	public void testParseJsonObjectEither3() {
+		MyObjectD object = new MyObjectD();
+		JsonObject jsonObject = new JsonObject();
+		jsonObject.addProperty("foo", "bar");
+		object.myProperty = Either3.forThird(jsonObject);
+		assertParse(object, "{\"myProperty\":{\"foo\":\"bar\"}}");
+	}
+
+	protected static class MyObjectD {
+		public Either3<String, Integer, Object> myProperty;
+
+		@Override
+		public boolean equals(Object obj) {
+			if (obj instanceof MyObjectD) {
+				MyObjectD other = (MyObjectD) obj;
+				return Objects.equals(this.myProperty, other.myProperty);
+			}
+			return false;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hashCode(this.myProperty);
 		}
 	}
 

@@ -1,12 +1,12 @@
 /******************************************************************************
  * Copyright (c) 2016-2018 TypeFox and others.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0,
  * or the Eclipse Distribution License v. 1.0 which is available at
  * http://www.eclipse.org/org/documents/edl-v10.php.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR BSD-3-Clause
  ******************************************************************************/
 package org.eclipse.lsp4j.services;
@@ -14,9 +14,14 @@ package org.eclipse.lsp4j.services;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-import org.eclipse.lsp4j.CallHierarchyCall;
-import org.eclipse.lsp4j.CallHierarchyParams;
-import org.eclipse.lsp4j.CallHierarchySymbol;
+import com.google.common.annotations.Beta;
+
+import org.eclipse.lsp4j.CallHierarchyIncomingCall;
+import org.eclipse.lsp4j.CallHierarchyIncomingCallsParams;
+import org.eclipse.lsp4j.CallHierarchyItem;
+import org.eclipse.lsp4j.CallHierarchyOutgoingCall;
+import org.eclipse.lsp4j.CallHierarchyOutgoingCallsParams;
+import org.eclipse.lsp4j.CallHierarchyPrepareParams;
 import org.eclipse.lsp4j.CodeAction;
 import org.eclipse.lsp4j.CodeActionParams;
 import org.eclipse.lsp4j.CodeLens;
@@ -28,6 +33,8 @@ import org.eclipse.lsp4j.Command;
 import org.eclipse.lsp4j.CompletionItem;
 import org.eclipse.lsp4j.CompletionList;
 import org.eclipse.lsp4j.CompletionParams;
+import org.eclipse.lsp4j.DeclarationParams;
+import org.eclipse.lsp4j.DefinitionParams;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
@@ -35,6 +42,7 @@ import org.eclipse.lsp4j.DidSaveTextDocumentParams;
 import org.eclipse.lsp4j.DocumentColorParams;
 import org.eclipse.lsp4j.DocumentFormattingParams;
 import org.eclipse.lsp4j.DocumentHighlight;
+import org.eclipse.lsp4j.DocumentHighlightParams;
 import org.eclipse.lsp4j.DocumentLink;
 import org.eclipse.lsp4j.DocumentLinkParams;
 import org.eclipse.lsp4j.DocumentOnTypeFormattingParams;
@@ -45,8 +53,15 @@ import org.eclipse.lsp4j.DocumentSymbolParams;
 import org.eclipse.lsp4j.FoldingRange;
 import org.eclipse.lsp4j.FoldingRangeRequestParams;
 import org.eclipse.lsp4j.Hover;
+import org.eclipse.lsp4j.HoverParams;
+import org.eclipse.lsp4j.ImplementationParams;
 import org.eclipse.lsp4j.Location;
+import org.eclipse.lsp4j.Moniker;
+import org.eclipse.lsp4j.MonikerParams;
 import org.eclipse.lsp4j.LocationLink;
+import org.eclipse.lsp4j.LinkedEditingRangeParams;
+import org.eclipse.lsp4j.LinkedEditingRanges;
+import org.eclipse.lsp4j.PrepareRenameParams;
 import org.eclipse.lsp4j.PrepareRenameResult;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.ReferenceParams;
@@ -54,11 +69,17 @@ import org.eclipse.lsp4j.RenameParams;
 import org.eclipse.lsp4j.ResolveTypeHierarchyItemParams;
 import org.eclipse.lsp4j.SelectionRange;
 import org.eclipse.lsp4j.SelectionRangeParams;
+import org.eclipse.lsp4j.SemanticTokens;
+import org.eclipse.lsp4j.SemanticTokensDelta;
+import org.eclipse.lsp4j.SemanticTokensDeltaParams;
+import org.eclipse.lsp4j.SemanticTokensParams;
+import org.eclipse.lsp4j.SemanticTokensRangeParams;
 import org.eclipse.lsp4j.SignatureHelp;
+import org.eclipse.lsp4j.SignatureHelpParams;
 import org.eclipse.lsp4j.SymbolInformation;
-import org.eclipse.lsp4j.TextDocumentPositionParams;
 import org.eclipse.lsp4j.TextDocumentRegistrationOptions;
 import org.eclipse.lsp4j.TextEdit;
+import org.eclipse.lsp4j.TypeDefinitionParams;
 import org.eclipse.lsp4j.TypeHierarchyItem;
 import org.eclipse.lsp4j.TypeHierarchyParams;
 import org.eclipse.lsp4j.WillSaveTextDocumentParams;
@@ -67,13 +88,12 @@ import org.eclipse.lsp4j.adapters.CodeActionResponseAdapter;
 import org.eclipse.lsp4j.adapters.DocumentSymbolResponseAdapter;
 import org.eclipse.lsp4j.adapters.LocationLinkListAdapter;
 import org.eclipse.lsp4j.adapters.PrepareRenameResponseAdapter;
+import org.eclipse.lsp4j.adapters.SemanticTokensFullDeltaResponseAdapter;
 import org.eclipse.lsp4j.jsonrpc.json.ResponseJsonAdapter;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
-
-import com.google.common.annotations.Beta;
 
 @JsonSegment("textDocument")
 public interface TextDocumentService {
@@ -109,7 +129,7 @@ public interface TextDocumentService {
 	 * Registration Options: TextDocumentRegistrationOptions
 	 */
 	@JsonRequest
-	default CompletableFuture<Hover> hover(TextDocumentPositionParams position) {
+	default CompletableFuture<Hover> hover(HoverParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -120,7 +140,7 @@ public interface TextDocumentService {
 	 * Registration Options: SignatureHelpRegistrationOptions
 	 */
 	@JsonRequest
-	default CompletableFuture<SignatureHelp> signatureHelp(TextDocumentPositionParams position) {
+	default CompletableFuture<SignatureHelp> signatureHelp(SignatureHelpParams params) {
 		throw new UnsupportedOperationException();
 	}
 	
@@ -130,11 +150,11 @@ public interface TextDocumentService {
 	 * 
 	 * Registration Options: TextDocumentRegistrationOptions
 	 * 
-	 * Since version 3.14.0
+	 * Since 3.14.0
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(LocationLinkListAdapter.class)
-	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> declaration(TextDocumentPositionParams params) {
+	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> declaration(DeclarationParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -146,7 +166,7 @@ public interface TextDocumentService {
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(LocationLinkListAdapter.class)
-	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> definition(TextDocumentPositionParams position) {
+	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> definition(DefinitionParams params) {
 		throw new UnsupportedOperationException();
 	}
 	
@@ -156,11 +176,11 @@ public interface TextDocumentService {
 	 * 
 	 * Registration Options: TextDocumentRegistrationOptions
 	 * 
-	 * Since version 3.6.0
+	 * Since 3.6.0
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(LocationLinkListAdapter.class)
-	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> typeDefinition(TextDocumentPositionParams position) {
+	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> typeDefinition(TypeDefinitionParams params) {
 		throw new UnsupportedOperationException();
 	}
 	
@@ -170,11 +190,11 @@ public interface TextDocumentService {
 	 * 
 	 * Registration Options: TextDocumentRegistrationOptions
 	 * 
-	 * Since version 3.6.0
+	 * Since 3.6.0
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(LocationLinkListAdapter.class)
-	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> implementation(TextDocumentPositionParams position) {
+	default CompletableFuture<Either<List<? extends Location>, List<? extends LocationLink>>> implementation(ImplementationParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -197,7 +217,7 @@ public interface TextDocumentService {
 	 * Registration Options: TextDocumentRegistrationOptions
 	 */
 	@JsonRequest
-	default CompletableFuture<List<? extends DocumentHighlight>> documentHighlight(TextDocumentPositionParams position) {
+	default CompletableFuture<List<? extends DocumentHighlight>> documentHighlight(DocumentHighlightParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -217,6 +237,8 @@ public interface TextDocumentService {
 	 * {@code true}. More details on this difference between the LSP and the LSP4J
 	 * can be found <a href="https://github.com/eclipse/lsp4j/issues/252">here</a>.
 	 * </p>
+	 * 
+	 * Servers should whenever possible return {@code DocumentSymbol} since it is the richer data structure.
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(DocumentSymbolResponseAdapter.class)
@@ -234,6 +256,17 @@ public interface TextDocumentService {
 	@JsonRequest
 	@ResponseJsonAdapter(CodeActionResponseAdapter.class)
 	default CompletableFuture<List<Either<Command, CodeAction>>> codeAction(CodeActionParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * The request is sent from the client to the server to resolve additional information for a given code action. This is usually used to compute
+	 * the `edit` property of a code action to avoid its unnecessary computation during the `textDocument/codeAction` request.
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest(value="codeAction/resolve", useSegment = false)
+	default CompletableFuture<CodeAction> resolveCodeAction(CodeAction unresolved) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -298,6 +331,24 @@ public interface TextDocumentService {
 	 */
 	@JsonRequest
 	default CompletableFuture<WorkspaceEdit> rename(RenameParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * The linked editing range request is sent from the client to the server to return
+	 * for a given position in a document the range of the symbol at the position
+	 * and all ranges that have the same content. Optionally a word pattern can be
+	 * returned to describe valid contents. A rename to one of the ranges can be
+	 * applied to all other ranges if the new content is valid. If no result-specific
+	 * word pattern is provided, the word pattern from the client's language configuration
+	 * is used.
+	 * 
+	 * Registration Options: LinkedEditingRangeRegistrationOptions
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest
+	default CompletableFuture<LinkedEditingRanges> linkedEditingRange(LinkedEditingRangeParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -388,7 +439,7 @@ public interface TextDocumentService {
 	 *  - Color boxes showing the actual color next to the reference
 	 *  - Show a color picker when a color reference is edited
 	 * 
-	 * Since version 3.6.0
+	 * Since 3.6.0
 	 */
 	@JsonRequest
 	default CompletableFuture<List<ColorInformation>> documentColor(DocumentColorParams params) {
@@ -401,7 +452,7 @@ public interface TextDocumentService {
 	 *  - modify a color reference.
 	 *  - show in a color picker and let users pick one of the presentations
 	 * 
-	 * Since version 3.6.0
+	 * Since 3.6.0
 	 */
 	@JsonRequest
 	default CompletableFuture<List<ColorPresentation>> colorPresentation(ColorPresentationParams params) {
@@ -412,7 +463,7 @@ public interface TextDocumentService {
 	 * The folding range request is sent from the client to the server to return all folding
 	 * ranges found in a given text document.
 	 * 
-	 * Since version 3.10.0
+	 * Since 3.10.0
 	 */
 	@JsonRequest
 	default CompletableFuture<List<FoldingRange>> foldingRange(FoldingRangeRequestParams params) {
@@ -423,11 +474,11 @@ public interface TextDocumentService {
 	 * The prepare rename request is sent from the client to the server to setup and test the validity of a rename
 	 * operation at a given location.
 	 * 
-	 * Since version 3.12.0
+	 * Since 3.12.0
 	 */
 	@JsonRequest
 	@ResponseJsonAdapter(PrepareRenameResponseAdapter.class)
-	default CompletableFuture<Either<Range, PrepareRenameResult>> prepareRename(TextDocumentPositionParams params) {
+	default CompletableFuture<Either<Range, PrepareRenameResult>> prepareRename(PrepareRenameParams params) {
 		throw new UnsupportedOperationException();
 	}
 
@@ -469,29 +520,109 @@ public interface TextDocumentService {
 	}
 
 	/**
-	 * The {@code textDocument/callHierarchy} request is sent from the client to the
-	 * server to request the call hierarchy for a symbol defined (or referenced) at
-	 * the given text document position. Returns a collection of calls from one
-	 * symbol to another. The server will send a collection of
-	 * {@link CallHierarchyCall} objects, or {@code null} if no callable symbol is
-	 * found at the given document position. Each {@code CallHierarchyCall} object
-	 * defines a call from one {@link CallHierarchySymbol} to another.
+	 * Bootstraps call hierarchy by returning the item that is denoted by the given document
+	 * and position. This item will be used as entry into the call graph. Providers should
+	 * return null when there is no item at the given location.
+	 * 
+	 * Since 3.16.0
 	 */
-	@Beta
 	@JsonRequest
-	default CompletableFuture<List<CallHierarchyCall>> callHierarchy(CallHierarchyParams params) {
+	default CompletableFuture<List<CallHierarchyItem>> prepareCallHierarchy(CallHierarchyPrepareParams params) {
 		throw new UnsupportedOperationException();
 	}
 
-	
+	/**
+	 * Provide all incoming calls for an item, e.g all callers for a method. In graph terms this describes directed
+	 * and annotated edges inside the call graph, e.g the given item is the starting node and the result is the nodes
+	 * that can be reached.
+	 * 
+	 * Since 3.16.0
+	*/
+	@JsonRequest(value="callHierarchy/incomingCalls", useSegment = false)
+	default CompletableFuture<List<CallHierarchyIncomingCall>> callHierarchyIncomingCalls(CallHierarchyIncomingCallsParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	* Provide all outgoing calls for an item, e.g call calls to functions, methods, or constructors from the given item. In
+	* graph terms this describes directed and annotated edges inside the call graph, e.g the given item is the starting
+	* node and the result is the nodes that can be reached.
+	* 
+	* Since 3.16.0
+	*/
+	@JsonRequest(value="callHierarchy/outgoingCalls", useSegment = false)
+	default CompletableFuture<List<CallHierarchyOutgoingCall>> callHierarchyOutgoingCalls(CallHierarchyOutgoingCallsParams params) {
+		throw new UnsupportedOperationException();
+	}
+
 	/**
 	 * The {@code textDocument/selectionRange} request is sent from the client to the server to return
 	 * suggested selection ranges at an array of given positions. A selection range is a range around
 	 * the cursor position which the user might be interested in selecting.
+	 * 
+	 * Since 3.15.0
 	 */
-	@Beta
 	@JsonRequest
 	default CompletableFuture<List<SelectionRange>> selectionRange(SelectionRangeParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * The {@code textDocument/semanticTokens/full} request is sent from the client to the server to return
+	 * the semantic tokens for a whole file.
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest(value="textDocument/semanticTokens/full", useSegment = false)
+	default CompletableFuture<SemanticTokens> semanticTokensFull(SemanticTokensParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * The {@code textDocument/semanticTokens/full/delta} request is sent from the client to the server to return
+	 * the semantic tokens delta for a whole file.
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest(value="textDocument/semanticTokens/full/delta", useSegment = false)
+	@ResponseJsonAdapter(SemanticTokensFullDeltaResponseAdapter.class)
+	default CompletableFuture<Either<SemanticTokens, SemanticTokensDelta>> semanticTokensFullDelta(SemanticTokensDeltaParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * The {@code textDocument/semanticTokens/range} request is sent from the client to the server to return
+	 * the semantic tokens delta for a range.
+	 *
+	 * When a user opens a file it can be beneficial to only compute the semantic tokens for the visible range
+	 * (faster rendering of the tokens in the user interface). If a server can compute these tokens faster than
+	 * for the whole file it can provide a handler for the textDocument/semanticTokens/range request to handle
+	 * this case special. Please note that if a client also announces that it will send the
+	 * textDocument/semanticTokens/range server should implement this request as well to allow for flicker free
+	 * scrolling and semantic coloring of a minimap.
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest(value="textDocument/semanticTokens/range", useSegment = false)
+	default CompletableFuture<SemanticTokens> semanticTokensRange(SemanticTokensRangeParams params) {
+		throw new UnsupportedOperationException();
+	}
+
+	/**
+	 * Language Server Index Format (LSIF) introduced the concept of symbol monikers to help associate symbols across
+	 * different indexes. This request adds capability for LSP server implementations to provide the same symbol moniker
+	 * information given a text document position. Clients can utilize this method to get the moniker at the current
+	 * location in a file user is editing and do further code navigation queries in other services that rely on LSIF indexes
+	 * and link symbols together.
+	 *
+	 * The {@code textDocument/moniker} request is sent from the client to the server to get the symbol monikers for a given
+	 * text document position. An array of Moniker types is returned as response to indicate possible monikers at the given location.
+	 * If no monikers can be calculated, an empty array or null should be returned.
+	 * 
+	 * Since 3.16.0
+	 */
+	@JsonRequest
+	default CompletableFuture<List<Moniker>> moniker(MonikerParams params) {
 		throw new UnsupportedOperationException();
 	}
 }

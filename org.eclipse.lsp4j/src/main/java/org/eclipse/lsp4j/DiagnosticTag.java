@@ -12,6 +12,11 @@
 
 package org.eclipse.lsp4j;
 
+/**
+ * The diagnostic tags.
+ * 
+ * Since 3.15.0
+ */
 public enum DiagnosticTag {
 
     /**

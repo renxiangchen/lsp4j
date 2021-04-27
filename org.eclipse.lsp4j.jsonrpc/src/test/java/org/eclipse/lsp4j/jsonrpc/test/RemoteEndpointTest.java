@@ -15,6 +15,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.net.SocketException;
 import java.util.ArrayList;
@@ -213,7 +214,7 @@ public class RemoteEndpointTest {
 			assertEquals(ResponseErrorCode.InternalError.getValue(), response.getError().getCode());
 			String exception = (String) response.getError().getData();
 			String expected = "java.lang.RuntimeException: BAAZ\n\tat org.eclipse.lsp4j.jsonrpc.test.RemoteEndpointTest";
-			assertEquals(expected, exception.substring(0, expected.length()));
+			assertEquals(expected, exception.replaceAll("\\r", "").substring(0, expected.length()));
 		} finally {
 			logMessages.unregister();
 		}
@@ -379,8 +380,12 @@ public class RemoteEndpointTest {
 				it.setParams("myparam");
 			}));
 
+			long timeout = System.currentTimeMillis() + TIMEOUT;
 			while (consumer.messages.isEmpty()) {
 				Thread.sleep(20);
+				if (System.currentTimeMillis() > timeout) {
+					fail("Timedout waiting for messages");
+				}
 			}
 			assertEquals("Check some response received", 1, consumer.messages.size());
 			ResponseMessage response = (ResponseMessage) consumer.messages.get(0);

@@ -1,7 +1,9 @@
+/.repository/
 /.m2/
 bin/
 target/
 build/
+xtend-gen/
 .gradle/
 .idea/
 META-INF/
@@ -13,3 +15,4 @@ org.eclipse.xtend.core.Xtend.prefs
 *._trace
 *.xtendbin
 .classpath
+.project
